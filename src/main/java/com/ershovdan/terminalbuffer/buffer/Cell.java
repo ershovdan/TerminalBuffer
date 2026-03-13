@@ -13,8 +13,8 @@ public class Cell {
     public Cell(char character) {
         this.character = character;
         this.style = new ArrayList<>();
-        this.foreground = "default";
-        this.background = "default";
+        this.foreground = "none";
+        this.background = "none";
     }
 
     public String getForeground() {

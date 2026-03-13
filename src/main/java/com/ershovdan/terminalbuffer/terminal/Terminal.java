@@ -14,7 +14,7 @@ public class Terminal {
     private final int width;
     private final int height;
 
-    private TerminalBufferInterface terminalBuffer;
+    private TerminalBuffer terminalBuffer;
 
     private StyleHandler styleHandler;
 
@@ -149,7 +149,7 @@ public class Terminal {
     private void drawCoordinates() {
         moveCursor(0, 0);
         clearLine();
-        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY());
+        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY() + ", " + terminalBuffer.getData()[0][4].getCharacter());
         moveCursorToActiveCell();
     }
 

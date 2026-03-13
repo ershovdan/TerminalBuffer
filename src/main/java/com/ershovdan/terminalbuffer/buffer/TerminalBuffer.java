@@ -35,6 +35,10 @@ public class TerminalBuffer implements TerminalBufferInterface {
         }
     }
 
+    public Cell[][] getData() {
+        return data;
+    }
+
     @Override
     public void setCurrentBg(String currentBg) {
         this.currentBg = currentBg;
@@ -185,22 +189,18 @@ public class TerminalBuffer implements TerminalBufferInterface {
 
     @Override
     public String getScreenLineAsString(int screenY) {
-        if (screenY >= height + scroll || screenY < scroll) return null;
-
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            sb.append(data[x][screenY + scroll]);
+            sb.append(data[x][screenY + scroll].getCharacter());
         }
         return sb.toString();
     }
 
     @Override
     public String getScrollbackLineAsString(int scrollY) {
-        if (scrollY >= scroll || scrollY < 0) return null;
-
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            sb.append(data[x][scrollY + scroll]);
+            sb.append(data[x][scrollY].getCharacter());
         }
         return sb.toString();
     }
@@ -210,7 +210,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
         StringBuilder sb = new StringBuilder();
         for (int y = scroll; y < height + scroll; y++) {
             for (int x = 0; x < width; x++) {
-                sb.append(data[x][y]);
+                sb.append(data[x][y].getCharacter());
             }
             sb.append("\n");
         }
@@ -222,7 +222,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
         StringBuilder sb = new StringBuilder();
         for (int y = 0; y < height + scroll; y++) {
             for (int x = 0; x < width; x++) {
-                sb.append(data[x][y]);
+                sb.append(data[x][y].getCharacter());
             }
             sb.append("\n");
         }
