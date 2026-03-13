@@ -1,7 +1,8 @@
-package com.ershovdan.terminalbuffer;
+package com.ershovdan.terminalbuffer.terminal;
 
 import com.ershovdan.terminalbuffer.buffer.Cell;
-import com.ershovdan.terminalbuffer.buffer.Cells;
+import com.ershovdan.terminalbuffer.buffer.TerminalBuffer;
+import com.ershovdan.terminalbuffer.buffer.TerminalBufferInterface;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,18 +14,17 @@ public class Terminal {
     private final int width;
     private final int height;
 
-    private Cells cells;
+    private TerminalBufferInterface terminalBuffer;
 
     private StyleHandler styleHandler;
 
     private final Scanner scanner = new Scanner(System.in);
 
-    Terminal(int width, int height, int maxScrollback) throws IOException, InterruptedException {
+    public Terminal(int width, int height, int maxScrollback) throws IOException, InterruptedException {
         this.width = width;
         this.height = height;
 
-        cells = new Cells(width, height, maxScrollback);
-
+        terminalBuffer = new TerminalBuffer(width, height, maxScrollback);
         styleHandler = new StyleHandler();
 
         switchToSttyRaw();
@@ -57,28 +57,28 @@ public class Terminal {
 
         try {
             switch (blocks.getFirst()) {
-                case "bg" -> cells.setCurrentBg(blocks.get(1));
-                case "fg" -> cells.setCurrentFg(blocks.get(1));
+                case "bg" -> terminalBuffer.setCurrentBg(blocks.get(1));
+                case "fg" -> terminalBuffer.setCurrentFg(blocks.get(1));
                 case "st" -> {
                     blocks.removeFirst();
-                    cells.setCurrentStyle(blocks);
+                    terminalBuffer.setCurrentStyle(blocks);
                 }
                 case "shift" -> {
                     switch (blocks.get(1)) {
-                        case "up" -> cells.shiftCursorUp(Integer.parseInt(blocks.get(2)));
-                        case "down" -> cells.shiftCursorDown(Integer.parseInt(blocks.get(2)));
-                        case "left" -> cells.shiftCursorLeft(Integer.parseInt(blocks.get(2)));
-                        case "right" -> cells.shiftCursorRight(Integer.parseInt(blocks.get(2)));
+                        case "up" -> terminalBuffer.shiftCursorUp(Integer.parseInt(blocks.get(2)));
+                        case "down" -> terminalBuffer.shiftCursorDown(Integer.parseInt(blocks.get(2)));
+                        case "left" -> terminalBuffer.shiftCursorLeft(Integer.parseInt(blocks.get(2)));
+                        case "right" -> terminalBuffer.shiftCursorRight(Integer.parseInt(blocks.get(2)));
                     }
                 }
-                case "insert" -> {
+                case "insert-text" -> {
                     blocks.removeFirst();
                     String text = String.join(" ", blocks);
-                    cells.insertText(text);
+                    terminalBuffer.insertText(text);
                 }
-                case "clr" -> cells.clear();
-                case "clrall" -> cells.clearAll();
-                case "fill" -> cells.fillLine(blocks.get(1).charAt(0));
+                case "clr" -> terminalBuffer.clearScreen();
+                case "clrall" -> terminalBuffer.clearAll();
+                case "fill" -> terminalBuffer.fillLine(blocks.get(1).charAt(0));
             }
         } catch (Exception e) {}
 
@@ -86,7 +86,7 @@ public class Terminal {
     }
 
     private void moveCursorToActiveCell() {
-        moveCursor(1 + cells.getCursorPosX(), 3 + cells.getCursorPosY());
+        moveCursor(1 + terminalBuffer.getCursorPosX(), 3 + terminalBuffer.getCursorPosY());
     }
 
     private void processInput() throws IOException, InterruptedException {
@@ -101,19 +101,19 @@ public class Terminal {
                         int arrow = System.in.read();
                         switch (arrow) {
                             case 'A' -> {
-                                cells.shiftCursorUp(1);
+                                terminalBuffer.shiftCursorUp(1);
                                 moveCursorToActiveCell();
                             }
                             case 'B' -> {
-                                cells.shiftCursorDown(1);
+                                terminalBuffer.shiftCursorDown(1);
                                 moveCursorToActiveCell();
                             }
                             case 'C' -> {
-                                cells.shiftCursorRight(1);
+                                terminalBuffer.shiftCursorRight(1);
                                 moveCursorToActiveCell();
                             }
                             case 'D' -> {
-                                cells.shiftCursorLeft(1);
+                                terminalBuffer.shiftCursorLeft(1);
                                 moveCursorToActiveCell();
                             }
                         }
@@ -126,16 +126,12 @@ public class Terminal {
             } else if (ch == 17) { // control+q
                 processCommand();
             } else if (ch == 8 || ch == 127) { // backspace
-                if (cells.isActiveCellEditable()) {
-                    insertStyledSymbol(cells.backspaceOperation());
-                }
+                insertStyledSymbol(terminalBuffer.backspaceOperation());
                 moveCursorToActiveCell();
             } else if (ch == 10 || ch == 13) { // return
-                cells.returnOperation();
+                terminalBuffer.returnOperation();
             } else {
-                if (cells.isActiveCellEditable()) {
-                    insertStyledSymbol(cells.insertChar((char) ch));
-                }
+                insertStyledSymbol(terminalBuffer.setChar((char) ch));
                 moveCursorToActiveCell();
             }
 
@@ -153,7 +149,7 @@ public class Terminal {
     private void drawCoordinates() {
         moveCursor(0, 0);
         clearLine();
-        System.out.print("column: " + cells.getCursorPosX() + ", row: " + cells.posY + ", cursorY: " + cells.getCursorPosY());
+        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY());
         moveCursorToActiveCell();
     }
 
@@ -177,7 +173,7 @@ public class Terminal {
             clearLine();
             for (int x = 0; x < width; x++) {
                 moveCursor(x + 1, y + 3);
-                insertStyledSymbol(cells.getCell(x, y));
+                insertStyledSymbol(terminalBuffer.getScreenCell(x, y));
             }
         }
 

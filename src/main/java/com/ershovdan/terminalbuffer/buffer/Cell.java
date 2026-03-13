@@ -10,7 +10,7 @@ public class Cell {
     private List<String> style;
 
 
-    Cell(char character) {
+    public Cell(char character) {
         this.character = character;
         this.style = new ArrayList<>();
         this.foreground = "default";
@@ -33,19 +33,23 @@ public class Cell {
         return character;
     }
 
-    public void setCharacter(char character) {
+    public Cell setCharacter(char character) {
         this.character = character;
+        return this;
     }
 
-    public void setStyle(List<String> style) {
+    public Cell setStyle(List<String> style) {
         this.style = style;
+        return this;
     }
 
-    public void setForeground(String foreground) {
+    public Cell setForeground(String foreground) {
         this.foreground = foreground;
+        return this;
     }
 
-    public void setBackground(String background) {
+    public Cell setBackground(String background) {
         this.background = background;
+        return this;
     }
 }

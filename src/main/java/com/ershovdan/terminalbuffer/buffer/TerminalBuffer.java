@@ -3,34 +3,29 @@ package com.ershovdan.terminalbuffer.buffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Cells {
-    private Cell[][] data;
-
-    private int posX;
-    public int posY;
-
-    private int cursorX = 0;
-    private int cursorY = 0;
-
+public class TerminalBuffer implements TerminalBufferInterface {
     private final int width;
     private final int height;
     private final int scroll;
 
-    private int hiddenScrollSize;
+    private int posY; // abs y
+    private int posX; // abs x
+    private int cursorX = 0; // relative x
+    private int cursorY = 0; // relative y
+
+    private Cell[][] data;
 
     private String currentBg = "none";
     private String currentFg = "none";
     private List<String> currentStyle = new ArrayList<>();
 
-    Cells(int width, int height, int scrollLines) {
+    public TerminalBuffer(int width, int height, int scrollLines) {
         this.width = width;
         this.height = height;
         this.scroll = scrollLines;
 
         posX = 0;
         posY = scroll;
-
-        hiddenScrollSize = scroll;
 
         data = new Cell[width][height + scroll];
         for (int y = 0; y < height + scroll; y++) {
@@ -40,28 +35,19 @@ public class Cells {
         }
     }
 
+    @Override
     public void setCurrentBg(String currentBg) {
         this.currentBg = currentBg;
     }
 
+    @Override
     public void setCurrentFg(String currentFg) {
         this.currentFg = currentFg;
     }
 
+    @Override
     public void setCurrentStyle(List<String> currentStyle) {
         this.currentStyle = currentStyle;
-    }
-
-    public String getCurrentBg() {
-        return currentBg;
-    }
-
-    public String getCurrentFg() {
-        return currentFg;
-    }
-
-    public List<String> getCurrentStyle() {
-        return currentStyle;
     }
 
     private void addRow() {
@@ -76,88 +62,97 @@ public class Cells {
         }
     }
 
+    @Override
     public int getCursorPosX() {
         return cursorX;
     }
 
+    @Override
     public int getCursorPosY() {
         return cursorY;
     }
 
-    public Cell getCell(int x, int y) {
-        return data[x][y + hiddenScrollSize];
+    @Override
+    public Cell getScreenCell(int screenX, int screenY) {
+        return data[screenX][screenY + scroll];
     }
 
-    public boolean isActiveCellEditable() {
-        return posY >= scroll;
+    @Override
+    public Cell getScrollbackCell(int scrollX, int scrollY) {
+        return data[scrollX][scrollY];
     }
 
+    @Override
     public Cell getActiveCell() {
         return data[posX][posY];
     }
 
-    public Cell insertChar(char ch) { // returns cell to be printed
-        if (!isActiveCellEditable()) return null;
-        getActiveCell().setCharacter(ch);
-        getActiveCell().setForeground(currentFg);
-        getActiveCell().setBackground(currentBg);
-        getActiveCell().setStyle(currentStyle);
-        Cell cellToReturn = getActiveCell();
+    @Override
+    public Cell setChar(char ch) { // returns cell to be printed
+        Cell cellToReturn = getActiveCell().setCharacter(ch).setForeground(currentFg).
+                setBackground(currentBg).setStyle(currentStyle);
         shiftCursorRight(1);
         return cellToReturn;
     }
 
+    @Override
     public Cell backspaceOperation() { // returns deleted cell
-        if (!isActiveCellEditable()) return null;
         Cell cellToReturn = getActiveCell();
         shiftCursorLeft(1);
         getActiveCell().setCharacter('\0');
         return cellToReturn;
     }
 
-    private void handleScrollShift() {
-        if (posY >= height + scroll) posY = height + scroll - 1;
-        if (posY < 0) posY = 0;
-    }
-
+    @Override
     public void returnOperation() {
         posX = 0;
         shiftCursor(0, 1);
 
-        handleScrollShift();
+        handleLimits();
 
         if (cursorY >= height - 1) {
             addRow();
         }
     }
 
+    @Override
     public void autoReturnCheck() {
         if (posX >= width) {
-            returnOperation();
+            if (posY < height + scroll - 1) {
+                returnOperation();
+            } else {
+                posX = width - 1;
+            }
         }
     }
 
+    @Override
     public void shiftCursorRight(int n) {
         shiftCursor(n, 0);
     }
 
+    @Override
     public void shiftCursorLeft(int n) {
         shiftCursor(-n, 0);
     }
 
+    @Override
     public void shiftCursorDown(int n) {
         shiftCursor(0, n);
     }
 
+    @Override
     public void shiftCursorUp(int n) {
         shiftCursor(0, -n);
     }
 
+    @Override
     public void setCursorPosition(int x, int y) {
         shiftCursor(x - cursorX, y - cursorY);
     }
 
-    public void clear() {
+    @Override
+    public void clearScreen() {
         for (int y = scroll; y < height + scroll; y++) {
             for (int x = 0; x < width; x++) {
                 data[x][y] = new Cell('\0');
@@ -165,6 +160,7 @@ public class Cells {
         }
     }
 
+    @Override
     public void clearAll() {
         for (int y = 0; y < height + scroll; y++) {
             for (int x = 0; x < width; x++) {
@@ -173,28 +169,43 @@ public class Cells {
         }
     }
 
+    @Override
     public void fillLine(char ch) {
-        if (!isActiveCellEditable()) return;
         for (int x = 0; x < width; x++) {
             data[x][posY].setCharacter(ch);
         }
     }
 
-    public void insertText(String text) {
-        if (!isActiveCellEditable()) return;
+    @Override
+    public void insertText(String text) { // if string is bigger than whole screen, beginning would be cut
         for (char c : text.toCharArray()) {
-            insertChar(c);
+            setChar(c);
         }
     }
 
-    public String getLineAsString(int y) {
+    @Override
+    public String getScreenLineAsString(int screenY) {
+        if (screenY >= height + scroll || screenY < scroll) return null;
+
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            sb.append(data[x][y + hiddenScrollSize]);
+            sb.append(data[x][screenY + scroll]);
         }
         return sb.toString();
     }
 
+    @Override
+    public String getScrollbackLineAsString(int scrollY) {
+        if (scrollY >= scroll || scrollY < 0) return null;
+
+        StringBuilder sb = new StringBuilder();
+        for (int x = 0; x < width; x++) {
+            sb.append(data[x][scrollY + scroll]);
+        }
+        return sb.toString();
+    }
+
+    @Override
     public String getScreenAsString() {
         StringBuilder sb = new StringBuilder();
         for (int y = scroll; y < height + scroll; y++) {
@@ -206,6 +217,7 @@ public class Cells {
         return sb.toString();
     }
 
+    @Override
     public String getAllAsString() {
         StringBuilder sb = new StringBuilder();
         for (int y = 0; y < height + scroll; y++) {
@@ -217,42 +229,41 @@ public class Cells {
         return sb.toString();
     }
 
-    private void shiftCursor(int shiftX, int shiftY) {
-        if (Math.abs(shiftX) > 1 && (posX + shiftX < 0 || posX + shiftX >= width)) {
-            if (posX + shiftX < 0) {
-                posX = 0;
-            } else {
-                posX += width - 1;
-            }
-        } else {
-            posX += shiftX;
-        }
+    private void handleLimits() {
+        if (posY >= height + scroll) posY = height + scroll - 1;
+        if (posY < scroll) posY = scroll;
 
-        autoReturnCheck();
+        if (posX < 0)  posX = 0;
+        if (posX >= width) posX = width - 1;
+    }
 
-        if (posX < 0) {
-            if (posY > 0) {
-                posX = width - 1;
-            } else {
-                posX = 0;
-            }
-            posY--;
-        }
-
-        posY += shiftY;
-        handleScrollShift();
-
+    private void calculateCursorPosition() {
         cursorX = posX;
         cursorY = posY - scroll;
-        if (cursorY < 0) {
-            cursorY = 0;
+    }
+
+    private void handleBackspaceAtBeginning() {
+        if (posX < 0) {
+            if (posY > scroll) {
+                posX = width - 1;
+                posY--;
+            } else {
+                posX = 0;
+            }
+        }
+    }
+
+    private void shiftCursor(int shiftX, int shiftY) {
+        posX += shiftX;
+        posY += shiftY;
+
+        if (Math.abs(shiftX) == 1) {
+            autoReturnCheck();
+            handleBackspaceAtBeginning();
         }
 
-        if (posY - cursorY < scroll) {
-            hiddenScrollSize = posY - cursorY;
-        } else {
-            hiddenScrollSize = scroll;
-        }
+        handleLimits();
 
+        calculateCursorPosition();
     }
 }

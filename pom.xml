@@ -21,7 +21,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.6.3</version>
                 <configuration>
-                    <mainClass>com.ershovdan.terminalbuffer.Main</mainClass>
+                    <mainClass>com.ershovdan.terminalbuffer.terminal.Main</mainClass>
                 </configuration>
             </plugin>
         </plugins>

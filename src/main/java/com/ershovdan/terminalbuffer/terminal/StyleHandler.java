@@ -1,4 +1,4 @@
-package com.ershovdan.terminalbuffer;
+package com.ershovdan.terminalbuffer.terminal;
 
 import com.ershovdan.terminalbuffer.buffer.Cell;
 
