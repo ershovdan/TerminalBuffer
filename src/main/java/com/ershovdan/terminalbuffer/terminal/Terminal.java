@@ -12,6 +12,7 @@ import java.util.Scanner;
 public class Terminal {
     private final int width;
     private final int height;
+    private final int maxScroll;
 
     private TerminalBuffer terminalBuffer;
 
@@ -22,6 +23,7 @@ public class Terminal {
     public Terminal(int width, int height, int maxScrollback) throws IOException, InterruptedException {
         this.width = width;
         this.height = height;
+        this.maxScroll = maxScrollback;
 
         terminalBuffer = new TerminalBuffer(width, height, maxScrollback);
         styleHandler = new StyleHandler();
@@ -43,11 +45,11 @@ public class Terminal {
     private void processCommand() throws IOException, InterruptedException {
         switchToSttySane();
 
-        moveCursor(0, height + 4);
+        moveCursor(0, height + maxScroll + 5);
 
         List<String> blocks = new ArrayList<>(Arrays.asList(scanner.nextLine().split(" ")));
 
-        moveCursor(0, height + 4);
+        moveCursor(0, height + maxScroll + 5);
         clearLine();
 
         switchToSttyRaw();
@@ -85,7 +87,7 @@ public class Terminal {
     }
 
     private void moveCursorToActiveCell() {
-        moveCursor(1 + terminalBuffer.getCursorPosX(), 3 + terminalBuffer.getCursorPosY());
+        moveCursor(1 + terminalBuffer.getCursorPosX(), 4 + maxScroll + terminalBuffer.getCursorPosY());
     }
 
     private void processInput() throws IOException, InterruptedException {
@@ -145,10 +147,21 @@ public class Terminal {
         System.out.println();
     }
 
+    private void drawHorLine(int w, String title) {
+        System.out.print("\r");
+        System.out.print(title);
+
+        int leftChars = w - title.length();
+        if (leftChars < 0)  leftChars = 0;
+
+        for (int x = 0; x < leftChars; x++) System.out.print("=");
+        System.out.println();
+    }
+
     private void drawCoordinates() {
         moveCursor(0, 0);
         clearLine();
-        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY() + ", ");
+        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY() + ", ESC to exit, Ctrl+Q to input command");
         moveCursorToActiveCell();
     }
 
@@ -167,11 +180,20 @@ public class Terminal {
     }
 
     private void redraw() {
-        for (int y = 0; y < height; y++) {
+        for (int y = 0; y < maxScroll; y++) {
             moveCursor(1, y + 3);
             clearLine();
             for (int x = 0; x < width; x++) {
                 moveCursor(x + 1, y + 3);
+                insertStyledSymbol(terminalBuffer.getScrollbackCell(x, y));
+            }
+        }
+
+        for (int y = 0; y < height; y++) {
+            moveCursor(1, y + maxScroll + 4);
+            clearLine();
+            for (int x = 0; x < width; x++) {
+                moveCursor(x + 1, y + maxScroll + 4);
                 insertStyledSymbol(terminalBuffer.getScreenCell(x, y));
             }
         }
@@ -183,7 +205,11 @@ public class Terminal {
         System.out.print("\033[H\033[2J");
         System.out.println();
 
-        drawHorLine(width);
+        drawHorLine(width, "Scrollback");
+
+        for (int y = 0; y < maxScroll; y++) System.out.println();
+
+        drawHorLine(width, "Screen");
 
         for (int y = 0; y < height; y++) System.out.println();
 
