@@ -2,7 +2,6 @@ package com.ershovdan.terminalbuffer.terminal;
 
 import com.ershovdan.terminalbuffer.buffer.Cell;
 import com.ershovdan.terminalbuffer.buffer.TerminalBuffer;
-import com.ershovdan.terminalbuffer.buffer.TerminalBufferInterface;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -74,7 +73,7 @@ public class Terminal {
                 case "insert-text" -> {
                     blocks.removeFirst();
                     String text = String.join(" ", blocks);
-                    terminalBuffer.insertText(text);
+                    terminalBuffer.writeText(text);
                 }
                 case "clr" -> terminalBuffer.clearScreen();
                 case "clrall" -> terminalBuffer.clearAll();
@@ -149,7 +148,7 @@ public class Terminal {
     private void drawCoordinates() {
         moveCursor(0, 0);
         clearLine();
-        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY() + ", " + terminalBuffer.getData()[0][4].getCharacter());
+        System.out.print("column: " + terminalBuffer.getCursorPosX() + ", row: " + terminalBuffer.getCursorPosY() + ", ");
         moveCursorToActiveCell();
     }
 

@@ -35,10 +35,6 @@ public class TerminalBuffer implements TerminalBufferInterface {
         }
     }
 
-    public Cell[][] getData() {
-        return data;
-    }
-
     @Override
     public void setCurrentBg(String currentBg) {
         this.currentBg = currentBg;
@@ -94,7 +90,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     @Override
     public Cell setChar(char ch) { // returns cell to be printed
         Cell cellToReturn = getActiveCell().setCharacter(ch).setForeground(currentFg).
-                setBackground(currentBg).setStyle(currentStyle);
+                setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
         shiftCursorRight(1);
         return cellToReturn;
     }
@@ -103,7 +99,8 @@ public class TerminalBuffer implements TerminalBufferInterface {
     public Cell backspaceOperation() { // returns deleted cell
         Cell cellToReturn = getActiveCell();
         shiftCursorLeft(1);
-        getActiveCell().setCharacter('\0');
+        getActiveCell().setCharacter('\0').setBackground("none")
+                .setForeground("none").setStyle(new ArrayList<>());
         return cellToReturn;
     }
 
@@ -176,12 +173,13 @@ public class TerminalBuffer implements TerminalBufferInterface {
     @Override
     public void fillLine(char ch) {
         for (int x = 0; x < width; x++) {
-            data[x][posY].setCharacter(ch);
+            data[x][posY].setCharacter(ch).setForeground(currentFg).
+                    setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
         }
     }
 
     @Override
-    public void insertText(String text) { // if string is bigger than whole screen, beginning would be cut
+    public void writeText(String text) { // if string is bigger than whole screen, beginning would be cut
         for (char c : text.toCharArray()) {
             setChar(c);
         }
@@ -215,6 +213,82 @@ public class TerminalBuffer implements TerminalBufferInterface {
             sb.append("\n");
         }
         return sb.toString();
+    }
+
+    private Cell createCellWithCurrentAttributes(char ch) {
+        return new Cell(ch).setForeground(currentFg)
+                .setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
+    }
+
+    private boolean isEmptyCell(Cell cell) {
+        return cell.getCharacter() == '\0' && "none".equals(cell.getForeground())
+                && "none".equals(cell.getBackground()) && cell.getStyle().isEmpty();
+    }
+
+    private Cell shiftLineRight(int y, int fromX) {
+        Cell oldLast = data[width - 1][y];
+        for (int x = width - 1; x > fromX; x--) {
+            data[x][y] = data[x - 1][y];
+        }
+        return oldLast;
+    }
+
+    private Cell insertCellAtLineStart(Cell cell, int y) {
+        Cell oldLast = data[width - 1][y];
+        for (int x = width - 1; x > 0; x--) {
+            data[x][y] = data[x - 1][y];
+        }
+        data[0][y] = cell;
+        return oldLast;
+    }
+
+    private boolean insertCharAtCursor(char ch) {
+        Cell carry = shiftLineRight(posY, posX);
+        data[posX][posY] = createCellWithCurrentAttributes(ch);
+
+        boolean scrolled = false;
+        int nextY = posY + 1;
+        while (carry != null && !isEmptyCell(carry)) {
+            if (nextY >= height + scroll) {
+                addRow();
+                scrolled = true;
+                nextY = height + scroll - 1;
+            }
+            carry = insertCellAtLineStart(carry, nextY);
+            nextY++;
+        }
+
+        return scrolled;
+    }
+
+    private void advanceCursorAfterInsert(boolean scrolledDuringInsert) {
+        posX += 1;
+        if (posX >= width) {
+            posX = 0;
+            posY += 1;
+            if (posY >= height + scroll) {
+                if (!scrolledDuringInsert) {
+                    addRow();
+                }
+                posY = height + scroll - 1;
+            }
+        }
+
+        handleLimits();
+        calculateCursorPosition();
+    }
+
+    @Override
+    public void insertText(String text) { // if string is bigger than whole screen beginning would be cut
+        for (char c : text.toCharArray()) {
+            boolean scrolled = insertCharAtCursor(c);
+            advanceCursorAfterInsert(scrolled);
+        }
+    }
+
+    @Override
+    public void insertEmptyLineAtBottom() {
+        addRow();
     }
 
     @Override

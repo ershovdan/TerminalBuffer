@@ -91,6 +91,25 @@ public class TerminalBufferTests {
     }
 
     @Test
+    void testSetCurrentStyleCreatesSnapshot() {
+        List<String> style = new ArrayList<>();
+        style.add("i");
+        terminalBuffer.setCurrentStyle(style);
+        terminalBuffer.setChar('a');
+
+        style.add("b"); // mutate after write
+        terminalBuffer.setChar('c');
+
+        terminalBuffer.shiftCursorLeft(1);
+        assertTrue(terminalBuffer.getActiveCell().getStyle().contains("i"));
+        assertTrue(terminalBuffer.getActiveCell().getStyle().contains("b"));
+
+        terminalBuffer.shiftCursorLeft(1);
+        assertTrue(terminalBuffer.getActiveCell().getStyle().contains("i"));
+        assertTrue(terminalBuffer.getActiveCell().getStyle().size() == 1);
+    }
+
+    @Test
     void testShiftCursorRight() {
         terminalBuffer.shiftCursorRight(2);
         assertEquals(2, terminalBuffer.getCursorPosX());
@@ -173,6 +192,24 @@ public class TerminalBufferTests {
     }
 
     @Test
+    void testBackspaceClearsAttributes() {
+        List<String> style = new ArrayList<>();
+        style.add("b");
+        terminalBuffer.setCurrentFg("green");
+        terminalBuffer.setCurrentBg("red");
+        terminalBuffer.setCurrentStyle(style);
+
+        terminalBuffer.setChar('a');
+        terminalBuffer.backspaceOperation();
+
+        Cell cell = terminalBuffer.getActiveCell();
+        assertEquals('\0', cell.getCharacter());
+        assertEquals("none", cell.getForeground());
+        assertEquals("none", cell.getBackground());
+        assertTrue(cell.getStyle().isEmpty());
+    }
+
+    @Test
     void testBackspaceOperationAtTopLeftLimit() {
         terminalBuffer.backspaceOperation();
 
@@ -186,6 +223,23 @@ public class TerminalBufferTests {
         for (int i = 0; i < 5; i++) {
             assertEquals('a', terminalBuffer.getScreenCell(i, 0).getCharacter());
         }
+    }
+
+    @Test
+    void testFillLineAppliesAttributes() {
+        List<String> style = new ArrayList<>();
+        style.add("u");
+        terminalBuffer.setCurrentFg("green");
+        terminalBuffer.setCurrentBg("red");
+        terminalBuffer.setCurrentStyle(style);
+
+        terminalBuffer.fillLine('x');
+
+        Cell cell = terminalBuffer.getScreenCell(0, 0);
+        assertEquals('x', cell.getCharacter());
+        assertEquals("green", cell.getForeground());
+        assertEquals("red", cell.getBackground());
+        assertTrue(cell.getStyle().contains("u"));
     }
 
     @Test
@@ -331,11 +385,52 @@ public class TerminalBufferTests {
     }
 
     @Test
+    void testWriteTextOverwrites() {
+        terminalBuffer.writeText("abcde");
+        terminalBuffer.setCursorPosition(0, 0);
+        terminalBuffer.writeText("XY");
+
+        assertEquals("XYcde", terminalBuffer.getScreenLineAsString(0));
+    }
+
+    @Test
+    void testInsertTextShiftsContent() {
+        terminalBuffer.writeText("abcde");
+        terminalBuffer.setCursorPosition(2, 0);
+        terminalBuffer.insertText("X");
+
+        assertEquals("abXcd", terminalBuffer.getScreenLineAsString(0));
+        assertEquals("e\0\0\0\0", terminalBuffer.getScreenLineAsString(1));
+    }
+
+    @Test
+    void testInsertEmptyLineAtBottom() {
+        terminalBuffer.writeText("AAAA");
+        terminalBuffer.returnOperation();
+        terminalBuffer.writeText("BBBB");
+
+        terminalBuffer.insertEmptyLineAtBottom();
+
+        assertEquals("AAAA\0", terminalBuffer.getScrollbackLineAsString(3));
+        assertEquals("BBBB\0", terminalBuffer.getScreenLineAsString(0));
+        assertEquals("\0\0\0\0\0", terminalBuffer.getScreenLineAsString(2));
+    }
+
+    @Test
     void testAutoReturn() {
         terminalBuffer.shiftCursorRight(4);
         terminalBuffer.shiftCursorRight(1);
 
         assertEquals(0, terminalBuffer.getCursorPosX());
         assertEquals(1, terminalBuffer.getCursorPosY());
+    }
+
+    @Test
+    void testAutoReturnAtBottomRowScrolls() {
+        terminalBuffer.setCursorPosition(4, 9);
+        terminalBuffer.shiftCursorRight(1);
+
+        assertEquals(4, terminalBuffer.getCursorPosX());
+        assertEquals(9, terminalBuffer.getCursorPosY());
     }
 }

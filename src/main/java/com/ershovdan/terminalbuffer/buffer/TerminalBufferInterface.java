@@ -43,13 +43,17 @@ public interface TerminalBufferInterface {
 
     void fillLine(char ch);
 
-    void insertText(String text);
+    void writeText(String text);
 
     String getScreenLineAsString(int y);
 
     String getScrollbackLineAsString(int y);
 
     String getScreenAsString();
+
+    void insertText(String text);
+
+    void insertEmptyLineAtBottom();
 
     String getAllAsString();
 }
