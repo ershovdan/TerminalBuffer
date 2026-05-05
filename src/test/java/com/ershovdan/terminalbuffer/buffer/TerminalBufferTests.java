@@ -310,6 +310,37 @@ public class TerminalBufferTests {
     }
 
     @Test
+    void testRepeatedScrollKeepsLogicalOrder() {
+        TerminalBuffer smallBuffer = new TerminalBuffer(3, 2, 2);
+
+        smallBuffer.fillLine('A');
+        smallBuffer.insertEmptyLineAtBottom();
+        smallBuffer.fillLine('B');
+        smallBuffer.insertEmptyLineAtBottom();
+        smallBuffer.fillLine('C');
+        smallBuffer.insertEmptyLineAtBottom();
+        smallBuffer.fillLine('D');
+
+        assertEquals("BBB", smallBuffer.getScrollbackLineAsString(0));
+        assertEquals("CCC", smallBuffer.getScrollbackLineAsString(1));
+        assertEquals("DDD", smallBuffer.getScreenLineAsString(0));
+        assertEquals("\0\0\0", smallBuffer.getScreenLineAsString(1));
+    }
+
+    @Test
+    void testReturnedCellMutationUpdatesBuffer() {
+        terminalBuffer.setChar('a');
+
+        Cell cell = terminalBuffer.getScreenCell(0, 0);
+        cell.setCharacter('z');
+        cell.setForeground("green");
+
+        Cell updated = terminalBuffer.getScreenCell(0, 0);
+        assertEquals('z', updated.getCharacter());
+        assertEquals("green", updated.getForeground());
+    }
+
+    @Test
     void testGetScreenAsString() {
         terminalBuffer.setChar('a');
         terminalBuffer.setChar('b');

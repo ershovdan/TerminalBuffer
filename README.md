@@ -8,7 +8,7 @@ This project implements a terminal screen buffer in Java with a visible screen
 and a scrollback history. It simulates how terminal emulators store characters,
 cursor position, and styling before rendering text to the screen.
 
-The buffer stores characters in a 2 dimensional grid of cells, where each cell contains:
+The buffer exposes a 2 dimensional grid of cells, where each cell contains:
 
 * a character
 * foreground color
@@ -62,9 +62,20 @@ All characters written afterward inherit the current style.
 
 # How the Buffer Works
 
-The buffer is implemented as a fixed-size 2D array of `Cell`:
+The buffer is implemented as fixed-size row storage:
 `width x (height + scrollback)`.
 The top part is scrollback (history), the bottom part is the visible screen.
+Internally, rows are kept in a ring buffer. A logical row maps to a physical
+row with `(topIndex + row) % capacity`, so scrolling only advances `topIndex`
+and clears the recycled row.
+
+Cell data is stored in parallel arrays:
+
+* `char[][]` for characters
+* `CellAttributes[][]` for foreground, background, and style
+
+Default attributes use a shared flyweight instance to avoid allocating a
+separate attributes object for every empty/default cell.
 
 Each time a character is written (`setChar` / `writeText`):
 
@@ -77,8 +88,8 @@ Each time a character is written (`setChar` / `writeText`):
 Insert mode (`insertText`) differs: it shifts existing content to the right
 from the cursor position and propagates overflow into following lines.
 
-Design trade-off: a fixed-size array keeps access O(1) and the implementation
-simple, at the cost of more copying when scrolling.
+Design trade-off: direct cell access remains O(1), and scrolling is O(1) apart
+from clearing the recycled row.
 
 ---
 
@@ -86,7 +97,8 @@ simple, at the cost of more copying when scrolling.
 
 * `TerminalBufferInterface` — public API for the buffer.
 * `TerminalBuffer` — buffer implementation.
-* `Cell` — single character cell with attributes.
+* `Cell` — public cell value/mutation API.
+* `CellAttributes` — internal immutable cell attributes with a shared default.
 
 ---
 

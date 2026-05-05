@@ -51,8 +51,8 @@ public class CellTests {
 
         cell.setStyle(style);
 
-        assertTrue(style.contains("i"));
-        assertTrue(style.contains("b"));
+        assertTrue(cell.getStyle().contains("i"));
+        assertTrue(cell.getStyle().contains("b"));
     }
 
 }

@@ -7,13 +7,16 @@ public class TerminalBuffer implements TerminalBufferInterface {
     private final int width;
     private final int height;
     private final int scroll;
+    private final int capacity;
 
     private int posY; // abs y
     private int posX; // abs x
     private int cursorX = 0; // relative x
     private int cursorY = 0; // relative y
+    private int topIndex = 0;
 
-    private Cell[][] data;
+    private char[][] characters;
+    private CellAttributes[][] attributes;
 
     private String currentBg = "none";
     private String currentFg = "none";
@@ -23,15 +26,15 @@ public class TerminalBuffer implements TerminalBufferInterface {
         this.width = width;
         this.height = height;
         this.scroll = scrollLines;
+        this.capacity = height + scroll;
 
         posX = 0;
         posY = scroll;
 
-        data = new Cell[width][height + scroll];
-        for (int y = 0; y < height + scroll; y++) {
-            for (int x = 0; x < width; x++) {
-                data[x][y] = new Cell('\0');
-            }
+        characters = new char[capacity][width];
+        attributes = new CellAttributes[capacity][width];
+        for (int y = 0; y < capacity; y++) {
+            clearPhysicalRow(y);
         }
     }
 
@@ -51,15 +54,46 @@ public class TerminalBuffer implements TerminalBufferInterface {
     }
 
     private void addRow() {
-        for (int y = 0; y < height + scroll - 1; y++) {
-            for (int x = 0; x < width; x++) {
-                data[x][y] = data[x][y + 1];
-            }
-        }
+        int oldTopIndex = topIndex;
+        topIndex = (topIndex + 1) % capacity;
+        clearPhysicalRow(oldTopIndex);
+    }
 
+    private void clearPhysicalRow(int row) {
         for (int x = 0; x < width; x++) {
-            data[x][height + scroll - 1] = new Cell('\0');
+            characters[row][x] = '\0';
+            attributes[row][x] = CellAttributes.DEFAULT;
         }
+    }
+
+    private int rowIndex(int logicalY) {
+        return (topIndex + logicalY) % capacity;
+    }
+
+    private char getCharacter(int x, int y) {
+        return characters[rowIndex(y)][x];
+    }
+
+    private CellAttributes getAttributes(int x, int y) {
+        return attributes[rowIndex(y)][x];
+    }
+
+    private Cell getCell(int x, int y) {
+        return new Cell(getCharacter(x, y), getAttributes(x, y), cell -> setCell(x, y, cell));
+    }
+
+    private void setCell(int x, int y, char character, CellAttributes cellAttributes) {
+        int row = rowIndex(y);
+        characters[row][x] = character;
+        attributes[row][x] = cellAttributes.isDefault() ? CellAttributes.DEFAULT : cellAttributes;
+    }
+
+    private void setCell(int x, int y, Cell cell) {
+        setCell(x, y, cell.getCharacter(), cell.getAttributes());
+    }
+
+    private void clearCell(int x, int y) {
+        setCell(x, y, '\0', CellAttributes.DEFAULT);
     }
 
     @Override
@@ -74,23 +108,23 @@ public class TerminalBuffer implements TerminalBufferInterface {
 
     @Override
     public Cell getScreenCell(int screenX, int screenY) {
-        return data[screenX][screenY + scroll];
+        return getCell(screenX, screenY + scroll);
     }
 
     @Override
     public Cell getScrollbackCell(int scrollX, int scrollY) {
-        return data[scrollX][scrollY];
+        return getCell(scrollX, scrollY);
     }
 
     @Override
     public Cell getActiveCell() {
-        return data[posX][posY];
+        return getCell(posX, posY);
     }
 
     @Override
     public Cell setChar(char ch) { // returns cell to be printed
-        Cell cellToReturn = getActiveCell().setCharacter(ch).setForeground(currentFg).
-                setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
+        Cell cellToReturn = createCellWithCurrentAttributes(ch);
+        setCell(posX, posY, cellToReturn);
         shiftCursorRight(1);
         return cellToReturn;
     }
@@ -99,8 +133,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     public Cell backspaceOperation() { // returns deleted cell
         Cell cellToReturn = getActiveCell();
         shiftCursorLeft(1);
-        getActiveCell().setCharacter('\0').setBackground("none")
-                .setForeground("none").setStyle(new ArrayList<>());
+        clearCell(posX, posY);
         return cellToReturn;
     }
 
@@ -119,7 +152,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     @Override
     public void autoReturnCheck() {
         if (posX >= width) {
-            if (posY < height + scroll - 1) {
+            if (posY < capacity - 1) {
                 returnOperation();
             } else {
                 posX = width - 1;
@@ -154,27 +187,26 @@ public class TerminalBuffer implements TerminalBufferInterface {
 
     @Override
     public void clearScreen() {
-        for (int y = scroll; y < height + scroll; y++) {
+        for (int y = scroll; y < capacity; y++) {
             for (int x = 0; x < width; x++) {
-                data[x][y] = new Cell('\0');
+                clearCell(x, y);
             }
         }
     }
 
     @Override
     public void clearAll() {
-        for (int y = 0; y < height + scroll; y++) {
-            for (int x = 0; x < width; x++) {
-                data[x][y] = new Cell('\0');
-            }
+        topIndex = 0;
+        for (int y = 0; y < capacity; y++) {
+            clearPhysicalRow(y);
         }
     }
 
     @Override
     public void fillLine(char ch) {
+        CellAttributes currentAttributes = createCurrentAttributes();
         for (int x = 0; x < width; x++) {
-            data[x][posY].setCharacter(ch).setForeground(currentFg).
-                    setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
+            setCell(x, posY, ch, currentAttributes);
         }
     }
 
@@ -189,7 +221,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     public String getScreenLineAsString(int screenY) {
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            sb.append(data[x][screenY + scroll].getCharacter());
+            sb.append(getCharacter(x, screenY + scroll));
         }
         return sb.toString();
     }
@@ -198,7 +230,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     public String getScrollbackLineAsString(int scrollY) {
         StringBuilder sb = new StringBuilder();
         for (int x = 0; x < width; x++) {
-            sb.append(data[x][scrollY].getCharacter());
+            sb.append(getCharacter(x, scrollY));
         }
         return sb.toString();
     }
@@ -206,53 +238,62 @@ public class TerminalBuffer implements TerminalBufferInterface {
     @Override
     public String getScreenAsString() {
         StringBuilder sb = new StringBuilder();
-        for (int y = scroll; y < height + scroll; y++) {
+        for (int y = scroll; y < capacity; y++) {
             for (int x = 0; x < width; x++) {
-                sb.append(data[x][y].getCharacter());
+                sb.append(getCharacter(x, y));
             }
             sb.append("\n");
         }
         return sb.toString();
     }
 
+    private CellAttributes createCurrentAttributes() {
+        if ("none".equals(currentFg) && "none".equals(currentBg) && currentStyle.isEmpty()) {
+            return CellAttributes.DEFAULT;
+        }
+        return new CellAttributes(currentFg, currentBg, new ArrayList<>(currentStyle));
+    }
+
     private Cell createCellWithCurrentAttributes(char ch) {
-        return new Cell(ch).setForeground(currentFg)
-                .setBackground(currentBg).setStyle(new ArrayList<>(currentStyle));
+        return new Cell(ch, createCurrentAttributes());
     }
 
     private boolean isEmptyCell(Cell cell) {
-        return cell.getCharacter() == '\0' && "none".equals(cell.getForeground())
-                && "none".equals(cell.getBackground()) && cell.getStyle().isEmpty();
+        return cell.getCharacter() == '\0' && cell.getAttributes().isDefault();
     }
 
     private Cell shiftLineRight(int y, int fromX) {
-        Cell oldLast = data[width - 1][y];
+        Cell oldLast = getCell(width - 1, y);
+        int row = rowIndex(y);
         for (int x = width - 1; x > fromX; x--) {
-            data[x][y] = data[x - 1][y];
+            characters[row][x] = characters[row][x - 1];
+            attributes[row][x] = attributes[row][x - 1];
         }
         return oldLast;
     }
 
     private Cell insertCellAtLineStart(Cell cell, int y) {
-        Cell oldLast = data[width - 1][y];
+        Cell oldLast = getCell(width - 1, y);
+        int row = rowIndex(y);
         for (int x = width - 1; x > 0; x--) {
-            data[x][y] = data[x - 1][y];
+            characters[row][x] = characters[row][x - 1];
+            attributes[row][x] = attributes[row][x - 1];
         }
-        data[0][y] = cell;
+        setCell(0, y, cell);
         return oldLast;
     }
 
     private boolean insertCharAtCursor(char ch) {
         Cell carry = shiftLineRight(posY, posX);
-        data[posX][posY] = createCellWithCurrentAttributes(ch);
+        setCell(posX, posY, createCellWithCurrentAttributes(ch));
 
         boolean scrolled = false;
         int nextY = posY + 1;
         while (carry != null && !isEmptyCell(carry)) {
-            if (nextY >= height + scroll) {
+            if (nextY >= capacity) {
                 addRow();
                 scrolled = true;
-                nextY = height + scroll - 1;
+                nextY = capacity - 1;
             }
             carry = insertCellAtLineStart(carry, nextY);
             nextY++;
@@ -266,11 +307,11 @@ public class TerminalBuffer implements TerminalBufferInterface {
         if (posX >= width) {
             posX = 0;
             posY += 1;
-            if (posY >= height + scroll) {
+            if (posY >= capacity) {
                 if (!scrolledDuringInsert) {
                     addRow();
                 }
-                posY = height + scroll - 1;
+                posY = capacity - 1;
             }
         }
 
@@ -294,9 +335,9 @@ public class TerminalBuffer implements TerminalBufferInterface {
     @Override
     public String getAllAsString() {
         StringBuilder sb = new StringBuilder();
-        for (int y = 0; y < height + scroll; y++) {
+        for (int y = 0; y < capacity; y++) {
             for (int x = 0; x < width; x++) {
-                sb.append(data[x][y].getCharacter());
+                sb.append(getCharacter(x, y));
             }
             sb.append("\n");
         }
@@ -304,7 +345,7 @@ public class TerminalBuffer implements TerminalBufferInterface {
     }
 
     private void handleLimits() {
-        if (posY >= height + scroll) posY = height + scroll - 1;
+        if (posY >= capacity) posY = capacity - 1;
         if (posY < scroll) posY = scroll;
 
         if (posX < 0)  posX = 0;
